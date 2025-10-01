@@ -1,6 +1,8 @@
 import streamlit as st
 import base64
 from io import BytesIO
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter, A4
 
 st.set_page_config(page_title="Procesador de Viajes", page_icon="📦")
 st.title("📦 Procesador de Viajes")
@@ -8,22 +10,42 @@ st.markdown("---")
 
 st.success("✅ **¡Aplicación funcionando correctamente!**")
 st.info("""
-### Próximos pasos:
-1. **Sube tu PDF** con las órdenes de transporte
-2. **La aplicación procesará** los datos automáticamente  
-3. **Descarga el resumen** en formato organizado
-
 ### Funcionalidades disponibles:
 - 📋 Procesamiento de órdenes de transporte
-- 🧾 Agrupación por cliente
+- 🧾 Agrupación por cliente  
 - 📊 Resumen ejecutivo con totales
 - 💰 Cálculo de condiciones de venta
+- 📄 Generación de PDF profesional
 """)
 
-# Simulador de funcionalidad
-st.markdown("---")
-st.subheader("🚀 Demo de Funcionalidad")
+# Función para generar PDF simple
+def generar_pdf_resumen(datos):
+    buffer = BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    
+    # Título
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(100, 800, "Resumen de Viajes - Procesador PDF")
+    
+    # Contenido
+    c.setFont("Helvetica", 12)
+    y_position = 750
+    
+    for i, viaje in enumerate(datos, 1):
+        texto = f"{i}. Orden {viaje['orden']} - {viaje['cliente']} - {viaje['total']}"
+        c.drawString(100, y_position, texto)
+        y_position -= 30
+        
+        if y_position < 100:
+            c.showPage()
+            y_position = 750
+            c.setFont("Helvetica", 12)
+    
+    c.save()
+    buffer.seek(0)
+    return buffer
 
+# Interfaz principal
 uploaded_file = st.file_uploader("Sube tu archivo PDF", type="pdf")
 
 if uploaded_file is not None:
@@ -58,12 +80,14 @@ if uploaded_file is not None:
         # Total general
         st.metric("💰 Total General", "₲ 2.550.000")
         
-        # Botón de descarga simulado
+        # Generar y descargar PDF
+        pdf_buffer = generar_pdf_resumen(datos_ejemplo)
+        
         st.download_button(
-            label="📥 Descargar Reporte Completo",
-            data="Este sería el archivo PDF generado",
-            file_name="resumen_viajes.txt",
-            mime="text/plain"
+            label="📥 Descargar Reporte PDF",
+            data=pdf_buffer.getvalue(),
+            file_name="resumen_viajes.pdf",
+            mime="application/pdf"
         )
 
 st.markdown("---")
