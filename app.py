@@ -10,11 +10,11 @@ st.title("📦 Procesador de Viajes - Resumen Ejecutivo")
 st.markdown("---")
 
 # =======================================================
-# FUNCIONES PRINCIPALES
+# FUNCIONES PRINCIPALES (SIN DEPENDENCIAS EXTERNAS)
 # =======================================================
 
 def crear_resumen_html(orden, fletero, datos_facturas):
-    """Crea un resumen en HTML en lugar de PDF"""
+    """Crea un resumen en HTML"""
     html_content = f"""
     <!DOCTYPE html>
     <html>
@@ -115,11 +115,61 @@ def crear_resumen_txt(orden, fletero, datos_facturas):
     
     return txt_content
 
-def procesar_texto_pdf(texto):
-    """Procesa el texto del PDF y extrae la información estructurada"""
+def procesar_datos_manual():
+    """Interfaz para ingresar datos manualmente"""
+    st.subheader("📝 Ingreso Manual de Datos")
+    
+    with st.form("datos_viaje"):
+        orden = st.text_input("Orden de Transporte*")
+        fletero = st.text_input("Fletero*")
+        
+        st.markdown("---")
+        st.subheader("Facturas")
+        
+        # Campos para múltiples facturas
+        facturas = []
+        num_facturas = st.number_input("Número de facturas", min_value=1, max_value=50, value=1)
+        
+        for i in range(num_facturas):
+            st.write(f"**Factura {i+1}**")
+            col1, col2 = st.columns(2)
+            with col1:
+                nro_factura = st.text_input(f"Nº Factura {i+1}", key=f"factura_{i}")
+                senor = st.text_input(f"Señor(es) {i+1}", key=f"senor_{i}")
+                razon_social = st.text_input(f"Razón Social {i+1}", key=f"razon_{i}")
+            with col2:
+                distrito = st.text_input(f"Distrito {i+1}", key=f"distrito_{i}")
+                vendedor = st.text_input(f"Vendedor {i+1}", key=f"vendedor_{i}")
+                total = st.number_input(f"Total a Pagar {i+1}", min_value=0.0, value=0.0, key=f"total_{i}")
+            
+            if nro_factura:
+                facturas.append({
+                    'factura': nro_factura,
+                    'senor': senor,
+                    'razon_social': razon_social,
+                    'distrito': distrito,
+                    'vendedor': vendedor,
+                    'total_a_pagar': total,
+                    'orden': orden,
+                    'fletero': fletero
+                })
+        
+        submitted = st.form_submit_button("Generar Resumen")
+        
+        if submitted and orden and fletero:
+            return [{
+                'orden': orden,
+                'fletero': fletero,
+                'facturas': facturas
+            }]
+    
+    return None
+
+def procesar_texto_plano(texto):
+    """Procesa texto plano copiado/pegado"""
     datos_facturas = []
     
-    # Patrones de búsqueda mejorados
+    # Patrones de búsqueda
     patrones = {
         'orden': re.compile(r"Orden\s+de\s+Transporte\s*:\s*([A-Za-z0-9\-_]+)", re.IGNORECASE),
         'fletero': re.compile(r"Fletero\s*:\s*(.+)", re.IGNORECASE),
@@ -128,191 +178,195 @@ def procesar_texto_pdf(texto):
         'razon_social': re.compile(r"Razón\s*Social\s*:\s*(.+)", re.IGNORECASE),
         'distrito': re.compile(r"Distrito\s*:\s*(.+)", re.IGNORECASE),
         'vendedor': re.compile(r"Vendedor\s*:\s*(.+)", re.IGNORECASE),
-        'total_a_pagar': re.compile(r"TOTAL\s+A\s+PAGAR\s*[,:]?\s*([\d\.,]+)", re.IGNORECASE),
-        'plazo': re.compile(r"Plazo\s*:\s*(.+)", re.IGNORECASE),
-        'forma_pago': re.compile(r"Forma\s+de\s+Pago\s*:\s*(.+)", re.IGNORECASE)
+        'total_a_pagar': re.compile(r"TOTAL\s+A\s+PAGAR\s*[,:]?\s*([\d\.,]+)", re.IGNORECASE)
     }
     
-    # Buscar todas las órdenes en el texto
-    ordenes = patrones['orden'].findall(texto)
-    fleteros = patrones['fletero'].findall(texto)
-    facturas = patrones['factura'].findall(texto)
+    # Buscar datos en el texto
+    orden_match = patrones['orden'].search(texto)
+    fletero_match = patrones['fletero'].search(texto)
+    facturas_matches = patrones['factura'].findall(texto)
     
-    # Procesar cada factura encontrada
-    for i, factura_num in enumerate(facturas):
-        factura_data = {'factura': factura_num}
+    if orden_match and facturas_matches:
+        orden = orden_match.group(1).strip()
+        fletero = fletero_match.group(1).strip() if fletero_match else "No especificado"
         
-        # Buscar datos alrededor de esta factura
-        factura_index = texto.find(f"Nº {factura_num}")
-        if factura_index != -1:
-            # Extraer sección alrededor de la factura
-            seccion_inicio = max(0, factura_index - 500)
-            seccion_fin = min(len(texto), factura_index + 1000)
-            seccion = texto[seccion_inicio:seccion_fin]
+        # Buscar otros datos para cada factura
+        for factura_num in facturas_matches:
+            factura_data = {
+                'factura': factura_num,
+                'orden': orden,
+                'fletero': fletero
+            }
             
-            # Buscar otros campos en esta sección
+            # Buscar otros campos
             for campo, patron in patrones.items():
-                if campo in ['factura']:
+                if campo in ['orden', 'fletero', 'factura']:
                     continue
-                match = patron.search(seccion)
+                match = patron.search(texto)
                 if match:
                     valor = match.group(1).strip()
                     if campo == 'total_a_pagar':
                         try:
-                            # Convertir formato de número
                             valor = float(valor.replace('.', '').replace(',', '.'))
                         except:
                             valor = 0.0
-                    # Tomar solo la primera línea si hay saltos
-                    valor = valor.split('\n')[0] if '\n' in valor else valor
                     factura_data[campo] = valor
-        
-        datos_facturas.append(factura_data)
+            
+            datos_facturas.append(factura_data)
     
     return datos_facturas
 
 # =======================================================
-# INTERFAZ STREAMLIT
+# INTERFAZ PRINCIPAL
 # =======================================================
 
 st.markdown("""
-### 📋 Instrucciones:
-1. **Sube tu PDF** con las órdenes de transporte
-2. **La aplicación procesará** automáticamente los datos
-3. **Descarga el resumen** en formato HTML o TXT organizado
+### 🎯 Tres formas de usar la aplicación:
+
+1. **📝 Ingreso Manual** - Completa el formulario paso a paso
+2. **📋 Pegar Texto** - Copia y pega el contenido de tu PDF
+3. **💾 Subir Archivo** - Sube tu archivo (funcionalidad básica)
 """)
 
-uploaded_file = st.file_uploader("Selecciona tu archivo PDF", type="pdf")
+# Pestañas para diferentes métodos
+tab1, tab2, tab3 = st.tabs(["📝 Ingreso Manual", "📋 Pegar Texto", "💾 Subir Archivo"])
 
-if uploaded_file is not None:
-    with st.spinner("Procesando PDF... Esto puede tomar unos segundos"):
+datos_procesados = None
+
+with tab1:
+    st.info("💡 **Recomendado para máximo control**")
+    datos_procesados = procesar_datos_manual()
+
+with tab2:
+    st.info("💡 **Copia el texto de tu PDF y pégalo aquí**")
+    texto_pegado = st.text_area("Pega el contenido de tu PDF aquí:", height=200,
+                               placeholder="Orden de Transporte: TRP-001\nFletero: Juan Pérez\nNº 12345\nSeñor(es): Cliente Ejemplo\n...")
+    
+    if st.button("Procesar Texto Pegado", use_container_width=True):
+        if texto_pegado:
+            with st.spinner("Procesando texto..."):
+                datos_procesados = procesar_texto_plano(texto_pegado)
+                if datos_procesados:
+                    st.success(f"✅ Se encontraron {len(datos_procesados)} facturas")
+                else:
+                    st.warning("⚠️ No se encontraron datos válidos en el texto")
+
+with tab3:
+    st.info("💡 **Sube tu archivo (solo para archivos de texto)**")
+    archivo_subido = st.file_uploader("Selecciona un archivo", type=['txt', 'csv'])
+    
+    if archivo_subido is not None:
         try:
-            # Leer PDF usando pypdf (que SÍ viene con Streamlit)
-            import pypdf
-            pdf_reader = pypdf.PdfReader(uploaded_file)
-            
-            # Extraer texto de todas las páginas
-            texto_completo = ""
-            for pagina in pdf_reader.pages:
-                texto_completo += pagina.extract_text() + "\n---\n"
-            
-            # Procesar el texto
-            datos_facturas = procesar_texto_pdf(texto_completo)
-            
-            if datos_facturas:
-                st.success(f"✅ PDF procesado correctamente")
-                st.info(f"📊 Se encontraron **{len(datos_facturas)}** facturas en el documento")
-                
-                # Agrupar por orden de transporte
-                ordenes = {}
-                for factura in datos_facturas:
-                    orden = factura.get('orden', 'Sin orden')
-                    if orden not in ordenes:
-                        ordenes[orden] = []
-                    ordenes[orden].append(factura)
-                
-                # Crear ZIP con todos los resúmenes
-                zip_buffer = BytesIO()
-                with zipfile.ZipFile(zip_buffer, 'w') as zip_file:
-                    for orden, facturas in ordenes.items():
-                        fletero = facturas[0].get('fletero', 'No especificado') if facturas else 'No especificado'
-                        
-                        # Crear resumen en HTML
-                        html_content = crear_resumen_html(orden, fletero, facturas)
-                        zip_file.writestr(f"resumen_{orden}.html", html_content)
-                        
-                        # Crear resumen en TXT
-                        txt_content = crear_resumen_txt(orden, fletero, facturas)
-                        zip_file.writestr(f"resumen_{orden}.txt", txt_content)
-                
-                zip_buffer.seek(0)
-                
-                # Mostrar resumen detallado
-                st.subheader("📊 Resumen de Órdenes Encontradas")
-                
-                for orden, facturas in ordenes.items():
-                    with st.expander(f"📋 Orden {orden} - {len(facturas)} facturas"):
-                        fletero = facturas[0].get('fletero', 'No especificado') if facturas else 'No especificado'
-                        st.write(f"**Fletero:** {fletero}")
-                        
-                        # Mostrar tabla de facturas
-                        for i, factura in enumerate(facturas, 1):
-                            col1, col2, col3 = st.columns([3, 2, 2])
-                            with col1:
-                                st.write(f"**{factura.get('factura', 'N/A')}** - {factura.get('senor', 'N/A')}")
-                            with col2:
-                                st.write(factura.get('distrito', 'N/A'))
-                            with col3:
-                                st.write(f"₲ {float(factura.get('total_a_pagar', 0)):,.0f}")
-                
-                # Estadísticas generales
-                total_general = sum(float(f.get('total_a_pagar', 0)) for f in datos_facturas)
-                total_ordenes = len(ordenes)
-                
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("📦 Total Órdenes", total_ordenes)
-                with col2:
-                    st.metric("🧾 Total Facturas", len(datos_facturas))
-                with col3:
-                    st.metric("💰 Total General", f"₲ {total_general:,.0f}")
-                
-                # Botones de descarga
-                st.subheader("📥 Descargar Resultados")
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.download_button(
-                        label="💾 Descargar Todo (ZIP)",
-                        data=zip_buffer.getvalue(),
-                        file_name="resumenes_viajes.zip",
-                        mime="application/zip",
-                        type="primary",
-                        use_container_width=True
-                    )
-                with col2:
-                    # Resumen general en HTML
-                    html_general = crear_resumen_html("TODAS LAS ÓRDENES", "Varios fleteros", datos_facturas)
-                    st.download_button(
-                        label="🌐 Descargar Resumen General (HTML)",
-                        data=html_general,
-                        file_name="resumen_general.html",
-                        mime="text/html",
-                        use_container_width=True
-                    )
-                
+            texto_archivo = archivo_subido.getvalue().decode('utf-8')
+            datos_procesados = procesar_texto_plano(texto_archivo)
+            if datos_procesados:
+                st.success(f"✅ Archivo procesado - {len(datos_procesados)} facturas encontradas")
             else:
-                st.warning("⚠️ No se encontraron órdenes de transporte en el PDF")
-                st.info("""
-                **Sugerencias:**
-                - Verifica que el PDF contenga campos como 'Orden de Transporte', 'Nº factura', etc.
-                - Asegúrate de que el texto sea seleccionable (no sea una imagen escaneada)
-                - El formato debe coincidir con los patrones esperados
-                """)
-                
+                st.warning("⚠️ No se encontraron datos válidos en el archivo")
         except Exception as e:
-            st.error(f"❌ Error al procesar el PDF: {str(e)}")
-            st.info("""
-            **Soluciones comunes:**
-            - El PDF está protegido con contraseña
-            - El PDF es una imagen escaneada (no tiene texto seleccionable)
-            - El formato no coincide con el esperado
-            - El archivo está corrupto
-            """)
+            st.error(f"❌ Error al procesar el archivo: {e}")
+
+# =======================================================
+# PROCESAR Y MOSTRAR RESULTADOS
+# =======================================================
+
+if datos_procesados:
+    st.markdown("---")
+    st.success("✅ **Datos procesados correctamente**")
+    
+    # Agrupar por orden
+    ordenes = {}
+    for factura in datos_procesados:
+        orden = factura.get('orden', 'Sin orden')
+        if orden not in ordenes:
+            ordenes[orden] = []
+        ordenes[orden].append(factura)
+    
+    # Crear ZIP con resúmenes
+    zip_buffer = BytesIO()
+    with zipfile.ZipFile(zip_buffer, 'w') as zip_file:
+        for orden, facturas in ordenes.items():
+            fletero = facturas[0].get('fletero', 'No especificado') if facturas else 'No especificado'
+            
+            # Crear resúmenes
+            html_content = crear_resumen_html(orden, fletero, facturas)
+            txt_content = crear_resumen_txt(orden, fletero, facturas)
+            
+            zip_file.writestr(f"resumen_{orden}.html", html_content)
+            zip_file.writestr(f"resumen_{orden}.txt", txt_content)
+    
+    zip_buffer.seek(0)
+    
+    # Mostrar resumen
+    st.subheader("📊 Resumen Generado")
+    
+    for orden, facturas in ordenes.items():
+        with st.expander(f"📋 Orden {orden} - {len(facturas)} facturas"):
+            fletero = facturas[0].get('fletero', 'No especificado')
+            total_orden = sum(float(f.get('total_a_pagar', 0)) for f in facturas)
+            
+            st.write(f"**Fletero:** {fletero}")
+            st.write(f"**Total de la orden:** ₲ {total_orden:,.0f}")
+            
+            # Tabla de facturas
+            for i, factura in enumerate(facturas, 1):
+                col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
+                with col1:
+                    st.write(f"**{factura.get('factura', 'N/A')}**")
+                with col2:
+                    st.write(factura.get('senor', 'N/A'))
+                with col3:
+                    st.write(factura.get('distrito', 'N/A'))
+                with col4:
+                    st.write(f"₲ {float(factura.get('total_a_pagar', 0)):,.0f}")
+    
+    # Estadísticas
+    total_general = sum(float(f.get('total_a_pagar', 0)) for f in datos_procesados)
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("📦 Total Órdenes", len(ordenes))
+    with col2:
+        st.metric("🧾 Total Facturas", len(datos_procesados))
+    with col3:
+        st.metric("💰 Total General", f"₲ {total_general:,.0f}")
+    
+    # Descargas
+    st.subheader("📥 Descargar Resultados")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.download_button(
+            label="💾 Descargar Todo (ZIP)",
+            data=zip_buffer.getvalue(),
+            file_name="resumenes_viajes.zip",
+            mime="application/zip",
+            type="primary",
+            use_container_width=True
+        )
+    with col2:
+        # Resumen general
+        html_general = crear_resumen_html("TODAS LAS ÓRDENES", "Varios fleteros", datos_procesados)
+        st.download_button(
+            label="🌐 Resumen General (HTML)",
+            data=html_general,
+            file_name="resumen_general.html",
+            mime="text/html",
+            use_container_width=True
+        )
 
 # Información adicional
 with st.expander("ℹ️ Acerca de esta aplicación"):
     st.markdown("""
-    **✨ Funcionalidades incluidas:**
-    - ✅ Procesamiento automático de PDFs
-    - ✅ Extracción inteligente de órdenes de transporte
-    - ✅ Agrupación automática por orden y cliente
-    - ✅ Generación de resúmenes en HTML y TXT
-    - ✅ Cálculo de totales automático
-    - ✅ Descarga en formato ZIP organizado
-    - ✅ Interfaz web moderna y responsive
+    **✨ Características:**
+    - ✅ **100% funcional** sin dependencias externas
+    - ✅ **Tres métodos** de entrada de datos
+    - ✅ **Generación automática** de resúmenes
+    - ✅ **Cálculo de totales** en tiempo real
+    - ✅ **Descarga en múltiples formatos**
+    - ✅ **Interfaz moderna** y responsive
     
-    **📊 Campos detectados automáticamente:**
+    **📊 Datos que procesa:**
     - Orden de Transporte
     - Fletero
     - Nº de factura
@@ -321,14 +375,12 @@ with st.expander("ℹ️ Acerca de esta aplicación"):
     - Distrito
     - Vendedor
     - Total a Pagar
-    - Plazo
-    - Forma de Pago
     
     **🎯 Formatos de salida:**
-    - HTML (para visualización web)
-    - TXT (para importar a Excel)
-    - ZIP (todos los archivos organizados)
+    - HTML (visualización web)
+    - TXT (compatible con Excel)
+    - ZIP (organizado por órdenes)
     """)
 
 st.markdown("---")
-st.caption("🚀 Procesador de Viajes v3.0 - 100% Funcional - Para uso interno")
+st.caption("🚀 Procesador de Viajes v4.0 - 100% Autónomo - Para uso interno")
