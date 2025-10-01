@@ -10,7 +10,7 @@ st.title("📦 Procesador de Viajes - Resumen Ejecutivo")
 st.markdown("---")
 
 # =======================================================
-# FUNCIONES PRINCIPALES (SIN DEPENDENCIAS EXTERNAS)
+# FUNCIONES PRINCIPALES
 # =======================================================
 
 def crear_resumen_html(orden, fletero, datos_facturas):
@@ -187,9 +187,9 @@ uploaded_file = st.file_uploader("Selecciona tu archivo PDF", type="pdf")
 if uploaded_file is not None:
     with st.spinner("Procesando PDF... Esto puede tomar unos segundos"):
         try:
-            # Leer PDF usando PyPDF2 (que viene con Streamlit)
-            import PyPDF2
-            pdf_reader = PyPDF2.PdfReader(uploaded_file)
+            # Leer PDF usando pypdf (que SÍ viene con Streamlit)
+            import pypdf
+            pdf_reader = pypdf.PdfReader(uploaded_file)
             
             # Extraer texto de todas las páginas
             texto_completo = ""
