@@ -1,3 +1,2 @@
 streamlit
-pypdf3
 reportlab
