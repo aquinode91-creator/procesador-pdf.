@@ -1,7 +1,7 @@
 import streamlit as st
 import re
 from pathlib import Path
-from PyPDF2 import PdfReader, PdfWriter
+from pypdf3 import PdfReader, PdfWriter
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import landscape, A4
 from reportlab.pdfbase import pdfmetrics
